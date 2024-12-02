@@ -1,0 +1,143 @@
+mport random
+
+# Values, Suits, and Rankings
+suits = ['Hearts','Diamonds','Clubs','Spades']
+ranks = ['2','3','4','5','6','7','8','9','10','J','Q','K','A','Joker']
+values = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 10, 'Q': 10, 'K': 10, 'A': 11, 'Joker': 0}
+#Joker allows hand reset
+
+# "Traps" aka Static or active Abilities/Power-Ups
+power_up_cards = ['Double Up', 'Dealers Downfall', 'Reset Hand', 'Swap Hands', 'Double Card']
+table_power_ups = ['Shield', 'Luck', 'Dealers Restriction', 'Stubborn', 'Lucky Draw']
+limit_power_ups = ['Limit Break', 'Boost', 'Super Limit']
+remove_limit_power_ups = ['Dispel Limit Break', 'Dispel Boost', 'Dispel Super Limit']
+remove_static_power_ups = ['Dispel Shield', 'Dispel Luck', 'Dispel Dealers Restriction', 'Dispel Stubborn', 'Dispel Lucky Draw']
+
+# Deck Creation w/ Joker and P-Ups
+def create_deck():
+    deck = []
+    for suit in suits:
+        for rank in ranks[:-1]: # Joker is not suited
+            deck.append((rank, suit))
+    deck.append(('Joker', 'Special'))  # Adding the Joker Card
+
+    # Active P-Ups 
+    for _ in range(2):  # 3 of each p-up in the deck
+        power_up = random.choice(power_up_cards)
+        deck.append((power_up, 'Special'))
+
+    # Static/Continuous P-Ups
+    for _ in range(2):  # 2 of each Static P-ups in the deck
+        table_up = random.choice(table_power_ups)
+        deck.append((table_up, 'Special'))
+
+    # Limit Raise P-Ups
+    for _ in range(2):  # 2 of Each limit raisers in the deck
+        limit_up = random.choice(limit_power_ups)
+        deck.append((limit_up, 'Special'))
+    
+    # Limit-Raise removal P-ups
+    for _ in range(2):  # 2 of each limit-raise removal in the deck
+        remove_limit_up = random.choice(remove_limit_power_ups)
+        deck.append((remove_limit_up, 'Special'))
+
+    # Static P-Up removal P-Ups
+    for _ in range(2):  # 2 of each Static P-Up removal in the deck
+        remove_static_up = random.choice(remove_static_power_ups)
+        deck.append((remove_static_up, 'Special'))
+
+    random.shuffle(deck)
+    return deck
+
+# Function to handle the special effects of the Joker card
+def handle_joker(player, hand):
+    print(f"{player} has drawn a Joker! You may reset your hand value.")
+    reset_value = int(input(f"{player}, choose a value to reset your hand to (1-21): "))
+
+def handle_power_up(player, hand, power_up, opponent_hand=None, table_effects=None):
+    if power_up == 'Double Up':
+        print(f"{player} draws a Double Up card! Your bet will be doubled.")
+        return True  # Indicates that the bet should be doubled
+    elif power_up == 'Dealers Downfall':
+        print("Dealer's Downfall! The dealer must take another card.")
+        opponent_hand.append(deck.pop())  # type: ignore # Forces the dealer to take a card
+    elif power_up == 'Reset Hand':
+        reset_value = int(input(f"{player}, draw a Reset Hand power-up! Choose a new hand value (1-21): "))
+        if 1 <= reset_value <= 21:
+            return reset_value
+        else:
+            print("Invalid value. Reset has no effect.")
+            return calculate_hand_value(hand)[0] # type: ignore
+    elif power_up == 'Swap Hands':
+        print("Swap Hands power-up activated! Swapping your hand with the dealer.")
+        hand, opponent_hand = opponent_hand, hand
+    elif power_up == 'Double Card':
+        print(f"{player} draws a Double Card power-up! You get an extra card.")
+        hand.append(deck.pop())  # type: ignore # Gives the player an additional card
+    elif power_up in table_power_ups:
+        table_effects[power_up] = True
+        print(f"{power_up} power-up activated! This will affect the entire round.")
+    elif power_up in remove_limit_power_ups:
+        print(f"{power_up} activated! Limit-raising effects are removed.")
+        return 21  # Reset limit to 21
+    elif power_up in remove_static_power_ups:
+        print(f"{power_up} activated! Static power-up effects are removed.")
+        if power_up == 'Dispel Shield':
+            table_effects.pop('Shield', None)
+        elif power_up == 'Dispel Luck':
+            table_effects.pop('Luck', None)
+        elif power_up == 'Dispel Dealers Restriction':
+            table_effects.pop('Dealers Restriction', None)
+        elif power_up == 'Dispel Stubborn':
+            table_effects.pop('Stubborn', None)
+        elif power_up == 'Dispel Lucky Draw':
+            table_effects.pop('Lucky Draw', None)
+    return hand
+
+# Function to apply table power-ups that affect the entire round
+def apply_table_power_ups(active_table_up, player_hand, dealer_hand):
+    effects = {}
+    if active_table_up == 'Shield':
+        print("Shield power-up activated! Your hand will be protected from busting (max 21).")
+        effects['Shield'] = True
+    elif active_table_up == 'Luck':
+        print("Luck power-up activated! You can re-draw a card after busting.")
+        effects['Luck'] = True
+    elif active_table_up == 'Dealers Restriction':
+        print("Dealer's Restriction power-up activated! The dealer must stop drawing at 18 or higher.")
+        effects['Dealers Restriction'] = True
+    elif active_table_up == 'Stubborn':
+        print("Stubborn power-up activated! You get an extra card for free.")
+        effects['Stubborn'] = True
+    elif active_table_up == 'Lucky Draw':
+        print("Lucky Draw power-up activated! You get to draw two cards on 'hit' instead of one.")
+        effects['Lucky Draw'] = True
+    return effects
+
+# Function to apply limit-raising power-ups
+def apply_limit_power_up(active_limit_up, current_limit):
+    if active_limit_up == 'Limit Break':
+        print("Limit Break power-up activated! Your hand limit is now 25.")
+        return 25  # Increase the limit to 25
+    elif active_limit_up == 'Boost':
+        print("Boost power-up activated! Your hand limit is increased by 5 points.")
+        return current_limit + 5  # Increase the limit by 5
+    elif active_limit_up == 'Super Limit':
+        print("Super Limit power-up activated! Your hand limit is now 30.")
+        return 30  # Set the limit to 30
+    return current_limit
+
+# Handle initial power-ups in hand
+    for player_card in player_hand:
+        if player_card[0] in power_up_cards + remove_limit_power_ups + remove_static_power_ups:
+            player_hand = handle_power_up("Player", player_hand, player_card[0], dealer_hand, table_power_ups_effect)
+
+    for dealer_card in dealer_hand:
+        if dealer_card[0] in power_up_cards + remove_limit_power_ups + remove_static_power_ups:
+            dealer_hand = handle_power_up("Dealer", dealer_hand, dealer_card[0], player_hand, table_power_ups_effect)
+
+# Check for limit-raising power-up removal
+    if player_card in remove_limit_power_ups:
+            hand_limit = handle_power_up("Player", player_hand, player_card, dealer_hand, table_power_ups_effect)
+    if dealer_card in remove_limit_power_ups:
+            hand_limit = handle_power_up("Dealer", dealer_hand, dealer_card, player_hand, table_power_ups_effect)
