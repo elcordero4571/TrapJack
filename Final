@@ -1,0 +1,525 @@
+import tkinter as tk
+import os
+from random import shuffle, choice
+import json
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Game constants
+CARD_VALUES = {str(i): i for i in range(2, 10)}
+CARD_VALUES.update({'J': 10, 'Q': 10, 'K': 10, 'A': 11})
+SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
+MAX_BUST = 21
+ROUND = 0
+
+
+
+# Obtain the image path of the cards
+def get_card_image_path(card_name):
+    file_name = card_name + ".png"
+    return os.path.join(script_dir, file_name)
+
+
+# Modifiers with images
+POWER_UP_IMAGES = {
+    "Add to 21": 'Trap Card - Add 21.png',
+    "Subtract from 21": 'Trap Card - Subtract 21 .png',
+    "Force hit": 'Trap Card - Force Hit.png',
+    "Force stay": 'Trap Card - Force Stay.png',
+    "Minus Card": 'Trap Card - Minus 1.png',
+    "Vanilla": 'Trap Card - Vanilla.png'
+}
+
+# Logo
+LOGO_PATH = os.path.join(script_dir, "TrapJack Logo.png")
+
+class TrapjackGame:
+    VICTORIES = 0
+    def __init__(self, wn):
+        self.wn = wn
+        self.wn.title("Trapjack 2.0")
+        self.achievements_file = "achievements.json"
+        
+        self.load_achievements()
+        self.logo_icon = tk.PhotoImage(file=LOGO_PATH)  # Load the logo icon
+        self.MenuScreen()
+        
+
+    def MenuScreen(self):
+        """Sets up the main menu screen with logo and buttons."""
+        self.clear_screen()
+
+        # Add logo
+        canvas = tk.Canvas(self.wn, width=1920, height=1080)
+        canvas.place(relx=0.73, rely=0.6, anchor="center")
+        canvas.create_image(500, 150, image=self.logo_icon, anchor="center")
+        self.wn.image = self.logo_icon  # Keep a reference to avoid garbage collection
+
+        # Add buttons
+        play_button = tk.Button(self.wn, text="START", width=15, height=2, bg="dark gray", fg="red", font=("Fixedsys", 60), pady=5, padx=5, command=self.start_game)
+        play_button.place(relx=0.5, rely=0.5, anchor="center")
+
+        achievements_button = tk.Button(self.wn, text="ACHIEVEMENTS", width=15, height=1, bg="dark gray", fg="red", font=("Fixedsys", 60), pady=10, padx=5, command=self.AchievementScreen)
+        achievements_button.place(relx=0.5, rely=0.65, anchor="center")
+
+        # Smaller help button next to Quit
+        help_button = tk.Button(self.wn, text="HELP", width=7, height=1, bg="dark gray", fg="red", font=("Fixedsys", 60), pady=10, padx=10, command=self.HelpScreen)
+        help_button.place(relx=0.345, rely=0.77, anchor="w")
+
+        quit_button = tk.Button(self.wn, text="QUIT", width=6, height=1, bg="dark gray", fg="red", font=("Fixedsys", 60), pady=10, padx=10, command=self.wn.quit)
+        quit_button.place(relx=0.655, rely=0.77, anchor="e")
+
+    def AchievementScreen(self):
+        self.clear_screen()
+        achievement_label = tk.Label(self.wn, text="ACHIEVEMENTS", fg="yellow", font=("Helvetica", 60))
+        achievement_label.pack(pady=20)
+        achievement_canvas = tk.Canvas(self.wn, width=1920, height=500)
+        achievement_canvas.pack(fill="both", expand=True)
+
+        # List of achievement descriptions
+        achievement_texts = [
+            "Runaway Groom",
+            "It's a TIE",
+            "Loathe at First Sight",
+            "Divorce Papers Stack",
+            "The Lucky Trial",
+            "Royal Wedding" ]
+        
+        self.achievement_labels = []  # Store the labels for each achievement
+        self.achievement_images = []  # Store reference
+
+        for i in range(6):
+            x_pos = 0.2 + (i % 3) * 0.3  # Spread across the screen (2 rows of 3)
+            y_pos = 0.15 + (i // 3) * 0.35
+
+            if self.achievements[i]:
+                try:    # Load and display achievement image
+                    achievement_image = tk.PhotoImage(file=self.achievements[i])
+                    resized_achievement_image = achievement_image.subsample(3, 3)
+                    self.achievement_images.append(resized_achievement_image)  # Keep a reference to avoid garbage collection
+                    achievement_placeholder = tk.Label(achievement_canvas, image=resized_achievement_image, bg="gray")
+                except:
+                    achievement_placeholder = tk.Label(achievement_canvas, text=achievement_texts[i], width=20, height=2, bg="gray", font=("Fixedsys", 20), pady=10, padx=5)
+            else:
+                achievement_placeholder = tk.Label(achievement_canvas, text=achievement_texts[i], width=20, height=2, bg="gray", font=("Fixedsys", 20), pady=10, padx=5)
+            achievement_placeholder.place(relx=x_pos, rely=y_pos, anchor="center")
+            self.achievement_labels.append(achievement_placeholder)
+
+        #Buttons
+        reset_ach_button1 = tk.Button(self.wn, text="RESET", width=4, height=1, bg="dark gray", fg="red", font=("Fixedsys", 60), pady=10, padx=10, command=self.ResetAch_Confirm)
+        reset_ach_button1.place(relx=0.7, rely=0.8, anchor="e")
+
+        back_to_menu_button1 = tk.Button(self.wn, text="MAIN MENU", width=8, height=1, bg="dark gray", fg="red", font=("Fixedsys", 60), pady=10, padx=10, command=self.MenuScreen)
+        back_to_menu_button1.place(relx=0.3, rely=0.8, anchor="w")
+    
+
+    def load_achievements(self):
+        """Load achievements from a JSON file."""
+        if os.path.exists(self.achievements_file):
+            with open(self.achievements_file, 'r') as f:
+                saved_achievements = json.load(f)
+                self.achievements = saved_achievements.get("achievements", [None] * 8)
+        else:
+            self.achievements = [None] * 6  # Create the file if it doesn't exist
+            
+    
+    def unlock_achievement(self, achievement_index, Ach_image_path):
+        """Unlock an achievement and save it."""
+        if 0 <= achievement_index < 8:
+            self.achievements[achievement_index] = Ach_image_path  # Save the image path for the achievement
+            self.save_achievements()  # Save the updated achievements to file
+
+    def save_achievements(self):
+        achievements_path = os.path.join(script_dir, self.achievements_file)
+        with open(achievements_path, 'w') as f:
+            json.dump({"achievements": self.achievements}, f)
+
+
+    def ResetAch_Confirm(self):
+        self.clear_screen()
+        confirm_Ach_del_frame = tk.Canvas(self.wn, width=1920, height=1000)
+        confirm_Ach_del_frame.pack(fill="both", expand=True)
+       
+        
+        confirm_Ach_label = tk.Label(confirm_Ach_del_frame, text="By resetting, all ACHIEVEMENTS\nwill be deleted.\nConfirm?", font=("Fixedsys", 60), pady=90,)
+        confirm_Ach_label.pack()
+        Ach_keys_label = tk.Label(confirm_Ach_del_frame, 
+                                  text= "ACHIEVEMENT KEYS:\n"
+                                    "Runaway Groom - Defeat the Dealer\n"
+                                    "It's a TIE - Have the game results in a draw\n"
+                                    "Loathe at First Sight - Win on the first round of the game\n"
+                                    'Divorce Papers Stack - Get the bust GOAL to 50 from "Add to 21" Trap Cards\n'
+                                    "The Lucky Trial - Win 10 matches in a roll\n"
+                                    "Royal Wedding - End the match with a Royal Diamond suit (J, K, and Q)",  
+                                  font=("Fixedsys", 30), pady=0, wraplength=1000)
+        Ach_keys_label.pack(fill="x")
+        reset_Ach_button = tk.Button(confirm_Ach_del_frame, text="RESET", width=4, height=1, bg="dark gray", fg="red", font=("Fixedsys", 60), pady=10, padx=10, command=self.ResetAchievements)
+        reset_Ach_button.place(relx=0.45, rely=0.8, anchor="e")
+
+        back_to_Ach_button = tk.Button(confirm_Ach_del_frame, text="CANCEL", width=8, height=1, bg="dark gray", fg="red", font=("Fixedsys", 60), pady=10, padx=10, command=self.AchievementScreen)
+        back_to_Ach_button.place(relx=0.5, rely=0.8, anchor="w")
+        
+
+    def ResetAchievements(self): #Resets all achievemnts 
+        self.achievements = [None] * 6
+        self.save_achievements()
+        self.AchievementScreen()
+
+        
+
+    def HelpScreen(self):
+        """Sets up the help screen."""
+        self.clear_screen()
+
+        help_label = tk.Label(self.wn, text="HELP", fg="yellow", font=("Helvetica", 60))
+        help_label.pack(pady=20)
+
+        game_description = (
+            "Welcome to Trapjack! This unique twist on the classic game of " 
+            "Blackjack introduces special cards and traps that alter the dynamics in unexpected ways. " 
+            "Your goal is to get as close to 21 as possible without going over, "
+            "but beware; sometimes, the game plays you. " 
+            "Will you outwit the traps, or will this marriage with your deck leave you regretting your decision?\n"
+            "Good luck, and remember: every card hides more than just a value!\n"
+            " \n"
+            "Created by Adam, Alex, and Elijah"
+        )
+        description_label = tk.Label(self.wn, text=game_description, wraplength=1400, justify="center", fg="white", font=("Helvetica", 40))
+        description_label.pack(pady=40)
+
+        back_to_menu_button = tk.Button(self.wn, text="Main Menu", width=10, height=1, bg="dark gray", fg="red", font=("Fixedsys", 60), pady=10, padx=5, command=self.MenuScreen)
+        back_to_menu_button.pack(pady=40)
+
+    def clear_screen(self):
+        """Remove all widgets from the window."""
+        for widget in self.wn.winfo_children():
+            widget.destroy()
+
+    def start_game(self):
+        """Start the game."""
+        self.clear_screen()
+        global MAX_BUST
+        MAX_BUST = 21
+        self.initialize_game()
+        
+        self.setup_ui()
+       
+        self.update_ui()
+        
+
+        
+    def initialize_game(self):
+        """Initialize game variables."""
+        self.deck = [f"{value} of {suit}" for value in CARD_VALUES for suit in SUITS]
+        shuffle(self.deck)
+        self.player_hand = []
+        self.dealer_hand = []
+        self.active_power_up = choice(list(POWER_UP_IMAGES.keys()))  # Draw a random Modifier
+        self.power_up_image = POWER_UP_IMAGES[self.active_power_up]
+        
+        self.game_over = False
+        
+        
+        # Initial deal
+        self.player_hand = [self.draw_card(), self.draw_card()]
+        self.dealer_hand = [self.draw_card(), self.draw_card()]
+
+    def setup_ui(self):
+        """Set up the game interface."""
+        
+        
+        # Dealer frame (Top Left)
+        self.dealer_frame = tk.Frame(self.wn)
+        self.dealer_frame.pack(side=tk.TOP, anchor="w", padx=20, pady=10)
+
+        # Resize and add the dealer image
+        dealer_image_path = os.path.join(script_dir,'TrapJack Dealer.png') 
+        self.dealer_image = tk.PhotoImage(file=dealer_image_path)
+        self.dealer_image_resized = self.dealer_image.subsample(3, 3)  # Resize the image (adjust subsample for fit)
+        self.dealer_image_label = tk.Label(self.dealer_frame, image=self.dealer_image_resized)
+        self.dealer_image_label.image = self.dealer_image_resized  # Keep a reference to avoid GC
+        self.dealer_image_label.pack(side=tk.LEFT, padx=10)
+        
+        self.dealer_cards = tk.Label(self.dealer_frame, text="", font=("Helvetica", 14))
+        self.dealer_cards.pack(side=tk.TOP, padx=10)
+        self.dealer_score = tk.Label(self.dealer_frame, text="Score: ", font=("Helvetica", 14))
+        self.dealer_score.pack(side=tk.TOP, padx=10, anchor="nw")
+
+        # Modifier frame (middle right)
+        self.powerup_frame = tk.Frame(self.wn)
+        self.powerup_frame.pack(pady=10, anchor='ne')
+
+        # MAX_BUST label
+        self.max_bust_label = tk.Label(self.powerup_frame, text=f"GOAL: {MAX_BUST}", font=("Helvetica", 20), fg="red")
+        self.max_bust_label.pack(padx=100, pady=0)
+        
+        #Check for Achievement #3
+        if MAX_BUST == 50:
+            game.unlock_achievement(3, os.path.join(script_dir,'Divorce Papers Stack.png'))
+
+        self.active_powerup_label = tk.Label(self.powerup_frame, text="Active Modifier: None", font=("Helvetica", 14))
+        self.active_powerup_label.pack(padx=100)
+
+        # Player frame (bottom)
+        self.player_frame = tk.Frame(self.wn)
+        self.player_frame.pack(side=tk.BOTTOM, pady=20, anchor='center')
+        self.hit_button = tk.Button(self.player_frame, text="Hit", font=("Helvetica", 14), command=self.hit)
+        self.hit_button.pack(side=tk.LEFT, padx=20)
+        self.stay_button = tk.Button(self.player_frame, text="Stay", font=("Helvetica", 14), command=self.stay)
+        self.stay_button.pack(side=tk.RIGHT, padx=20)
+        self.player_cards = tk.Label(self.wn, text="", font=("Helvetica", 14))
+        self.player_cards.pack(side=tk.BOTTOM, pady=10)
+        self.player_score = tk.Label(self.wn, text="Score: ", font=("Helvetica", 14))
+        self.player_score.pack(side=tk.BOTTOM, pady=5)
+        
+        
+
+    def apply_power_up(self):
+        """Apply the effect of the active power-up."""
+        global MAX_BUST
+       
+        if self.active_power_up == "Add to 21":
+            MAX_BUST = MAX_BUST + choice([3, 5])
+        
+    
+        elif self.active_power_up == "Subtract from 21":
+            MAX_BUST = MAX_BUST - choice([1, 4])
+            
+             
+        elif self.active_power_up == "Force hit":
+            self.stay_button.config(state='disabled')
+            
+        elif self.active_power_up == "Force stay":
+            self.hit_button.config(state='disabled')
+
+        elif self.active_power_up == "Minus Card":
+            P_card_removed = choice(self.player_hand)
+            self.player_hand.remove(P_card_removed)
+
+        
+            self.dealer_hand.pop()
+             # Remove the last card from player's hand
+        elif self.active_power_up == "Vanilla":
+            MAX_BUST = 21  # Reset to standard bust limit
+            
+        
+
+
+    def update_ui(self):
+        global ROUND
+        ROUND += 1
+
+        """Update the UI elements."""
+        # Draw a random power-up
+        self.active_power_up = choice(list(POWER_UP_IMAGES.keys()))  # Random power-up name
+        power_up_image_path = POWER_UP_IMAGES[self.active_power_up]
+        self.apply_power_up()
+
+        # Update text elements
+        self.dealer_cards.config(text="Dealer: " + ", ".join(self.dealer_hand))
+        self.player_cards.config(text="Player: " + ", ".join(self.player_hand))
+        self.dealer_score.config(text=f"Hand Value: {self.calculate_score(self.dealer_hand)}")
+        self.player_score.config(text=f"Hand Value: {self.calculate_score(self.player_hand)}")
+        
+        # Update power-up texts
+        self.active_powerup_label.config(text=f"Active Modifier: {self.active_power_up}")
+        self.max_bust_label.config(text=f"GOAL: {MAX_BUST}")
+       
+        # Remove old image
+        if hasattr(self, 'power_up_img_label') and self.power_up_img_label.winfo_exists():
+            self.power_up_img_label.destroy()
+
+        # Load and display the new image
+        self.power_up_img = tk.PhotoImage(file=os.path.join(script_dir,power_up_image_path))
+        self.power_up_img_resized = self.power_up_img.subsample(2, 2)  
+        self.power_up_img_label = tk.Label(self.powerup_frame, image=self.power_up_img_resized)
+        self.power_up_img_label.image = self.power_up_img_resized  # Image reference 
+        self.power_up_img_label.pack(pady=20, padx=30)
+
+
+         # Clear existing card images
+        if hasattr(self, 'player_card_images'):
+            for img_label in self.player_card_images:
+                img_label.destroy()
+        if hasattr(self, 'dealer_card_images'):
+            for D_img_label in self.dealer_card_images:
+                D_img_label.destroy()
+
+        # Display player's cards as images
+        self.player_card_images = []  # Store card image widgets
+        for card in self.player_hand:
+            P_card_image_path = get_card_image_path(card)  # Get file path
+            P_card_image = tk.PhotoImage(file=P_card_image_path)
+            player_card_image_resized = P_card_image.subsample(3, 3)  # Resize image
+
+            # Create and display image label
+            P_card_label = tk.Label(self.wn, image=player_card_image_resized)
+            P_card_label.image = player_card_image_resized # Prevent garbage collection
+            P_card_label.pack(side=tk.LEFT, padx=5, pady=5)  # Adjust layout as needed
+            self.player_card_images.append(P_card_label)
+        
+        #Display dealer's card as images
+        self.dealer_card_images = []  # Store card image widgets
+        for D_card in self.dealer_hand:
+            D_card_image_path = get_card_image_path(D_card)  # Get file path
+            D_card_image = tk.PhotoImage(file=D_card_image_path)
+            # Resize image
+            D_card_image_resized = D_card_image.subsample(3, 3)  # Adjust as needed
+            D_card_label = tk.Label(self.dealer_frame, image=D_card_image_resized)
+            D_card_label.image = D_card_image_resized  # Prevent garbage collection
+            D_card_label.pack(side=tk.RIGHT, padx=5, pady=5)  # Adjust layout as needed
+            self.dealer_card_images.append(D_card_label)
+
+        # Check for bust
+        if self.calculate_score(self.player_hand) >= MAX_BUST:
+            self.game_over = True
+            self.end_game()
+
+        if self.calculate_score(self.dealer_hand) >= MAX_BUST:
+            self.game_over = True
+            self.end_game()
+
+            
+
+    def draw_card(self):
+        """Draw a card from the deck."""
+        return self.deck.pop()
+
+    def hit(self):
+        """Player chooses to hit (take another card)."""
+        self.stay_button.config(state='normal')
+
+        if self.game_over:
+            return
+
+        self.player_hand.append(self.draw_card())
+        self.power_up_img_label.forget()
+        
+        #Adds card to dealer
+        if self.calculate_score(self.dealer_hand) < MAX_BUST - 4:
+            self.dealer_hand.append(self.draw_card())
+        
+        self.update_ui()
+
+         # Check for bust
+        if self.calculate_score(self.player_hand) >= MAX_BUST:
+            self.game_over = True
+            self.end_game()
+        if self.calculate_score(self.dealer_hand) >= MAX_BUST:
+            self.game_over = True
+            self.end_game()
+
+        
+            
+
+    def stay(self):
+        """Player chooses to end their turn"""
+        self.hit_button.config(state='normal')
+
+        # Check for bust
+        if self.calculate_score(self.player_hand) >= MAX_BUST:
+            self.game_over = True
+            self.end_game()
+
+        if self.calculate_score(self.dealer_hand) >= MAX_BUST:
+            self.game_over = True
+            self.end_game()
+            
+
+        elif self.calculate_score(self.dealer_hand) <= MAX_BUST - 4:
+            self.dealer_hand.append(self.draw_card())
+        
+        self.update_ui()
+
+    def end_game(self):
+        self.hit_button.config(state='disabled')
+        self.stay_button.config(state='disabled')
+
+        """Ends the game"""
+        player_score = self.calculate_score(self.player_hand)
+        dealer_score = self.calculate_score(self.dealer_hand)
+
+        # Display the result
+        if player_score > MAX_BUST:
+            result = "You bust! Dealer wins."
+        elif dealer_score > MAX_BUST:
+            result = "Dealer busted! You win!"
+        elif player_score > dealer_score:
+            result = "You win!"
+        elif player_score == dealer_score:
+            result = "It's a tie!"
+        else:
+            result = "Dealer wins!"
+        if player_score > MAX_BUST and dealer_score > MAX_BUST:
+            result = "It's a tie!"
+        
+        self.OUTCOME = result
+        
+        global ROUND #Resets the round Counter
+        ROUND =  0
+
+        #Game Over Frame
+        game_over_canvas = tk.Canvas(self.wn, width=2000, height=2000)
+        game_over_canvas.pack(fill="both", expand=True)
+        game_over_canvas.place(x=655, y=380)
+        
+        # Play Again and Main Menu buttons
+        result_label = tk.Label(game_over_canvas, text=result, font=("Helvetica", 30), fg='red', anchor="center")
+        result_label.pack(pady=20)
+        
+        play_again_button = tk.Button(game_over_canvas, text="Play Again", font=("Helvetica", 20), command=self.start_game)
+        play_again_button.pack(pady=10)
+
+        main_menu_button = tk.Button(game_over_canvas, text="Main Menu", font=("Helvetica", 20), command=self.MenuScreen)
+        main_menu_button.pack(pady=10)
+        self.Check_Achievement()
+
+    def calculate_score(self, hand):
+        """Calculate the score of a hand."""
+        score = 0
+        aces = 0
+        for card in hand:
+            card_value = card.split()[0]
+            score += CARD_VALUES[card_value]
+            if card_value == "A":
+                aces += 1
+        # Adjust for aces being either 1 or 11
+        while score > MAX_BUST and aces:
+            score -= 10
+            aces -= 1
+        return score
+
+    def Check_Achievement(self):
+        if self.OUTCOME == "You win!" or "Dealer busted! You win!":
+            game.unlock_achievement(0, os.path.join(script_dir,'Runaway Groom.png'))
+        if self.OUTCOME == "It's a tie!":
+            game.unlock_achievement(1, os.path.join(script_dir,'Its a TIE.png'))
+        if ROUND == 1:
+            game.unlock_achievement(2, os.path.join(script_dir,'Loathe at First Sight.png'))
+        
+        required_cards = set(["J of Diamonds", "K of Diamonds", "Q of Diamonds"])
+        if required_cards.issubset(set(self.player_hand)):
+            game.unlock_achievement(5, os.path.join(script_dir,'Royal Wedding.png'))
+
+        if self.OUTCOME == "You win!" or self.OUTCOME == "Dealer busted! You win!":
+            self.VICTORIES += 1
+        else:
+            self.VICTORIES = 0
+        if self.VICTORIES == 10:
+            game.unlock_achievement(4, os.path.join(script_dir, 'The Luck Trial.png'))
+        
+        return self.VICTORIES
+        
+
+
+
+# Main
+if __name__ == "__main__":
+    wn = tk.Tk()
+    wn.attributes('-fullscreen', False)
+    wn.geometry("1920x1080")
+    game = TrapjackGame(wn)
+    #Check the directory of the Python file
+    print("Directory of Python file:", os.getcwd())
+
+    wn.mainloop()
+    
