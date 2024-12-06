@@ -515,7 +515,6 @@ class TrapjackGame:
 # Main
 if __name__ == "__main__":
     wn = tk.Tk()
-    wn.configure(bg="1C1C1E")
     wn.attributes('-fullscreen', False)
     wn.geometry("1920x1080")
     game = TrapjackGame(wn)
